@@ -1,0 +1,6 @@
+# Pin the toolchain so `cargo` behaves identically in the dev shell, in CI, and
+# in the Nix build. The actual compiler binary is still supplied by nixpkgs (see
+# flake.nix); this file records the channel we develop against.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

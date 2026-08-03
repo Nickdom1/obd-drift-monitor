@@ -1,0 +1,15 @@
+[package]
+name = "decoderd"
+description = "Standalone OBD decode binary: JSON-lines stdin -> decoded JSON stdout (Telegraf execd processor)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "decoderd"
+path = "src/main.rs"
+
+[dependencies]
+decode = { path = "../decode" }
+# JSON (serde) lands in Phase 5 when the execd wire format is implemented.

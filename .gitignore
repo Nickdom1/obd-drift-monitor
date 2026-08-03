@@ -42,6 +42,10 @@ htmlcov/
 result
 result-*
 
+# Rust
+target/
+**/target/
+
 # IDEs
 .vscode/
 .idea/

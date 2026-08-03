@@ -2,7 +2,7 @@
   description = "OBD Drift Monitor - Vehicle telemetry gateway and time-series monitor tracking";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -22,8 +22,14 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Python environment with test tooling
+            # Python environment with test tooling (equivalence + benchmark harness)
             pythonEnv
+
+            # Rust toolchain for the decode crate (lib + decoderd bin)
+            cargo
+            rustc
+            clippy
+            rustfmt
 
             # CAN utilities for bench work
             can-utils
@@ -46,6 +52,7 @@
             echo "  pytest --cov=pkgs   - Run tests with coverage"
             echo "  ruff check .        - Lint Python code"
             echo "  ruff format .       - Format Python code"
+            echo "  cargo test          - Run Rust decode tests (in pkgs/decode-rs)"
             echo "  nix flake check     - Run all checks"
             echo ""
             echo "CAN utilities (for hardware work):"
@@ -92,6 +99,15 @@
               mkdir -p $out
               echo "Ruff checks passed" > $out/result
             '';
+          };
+
+          # Rust decode crate: buildRustPackage runs `cargo test` in its check
+          # phase, so this builds the workspace and gates on the unit tests.
+          cargo-test = pkgs.rustPlatform.buildRustPackage {
+            pname = "obd-decode-rs";
+            version = "0.1.0";
+            src = ./pkgs/decode-rs;
+            cargoLock.lockFile = ./pkgs/decode-rs/Cargo.lock;
           };
         };
 

@@ -1,0 +1,22 @@
+[package]
+name = "decode"
+description = "Pure OBD-II Mode 01 / Mode 06 decode library (no I/O)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# The decode logic is a pure library: bytes in, structured data out. No sockets,
+# files, or databases ever live here (mirrors the Python decode philosophy).
+name = "decode"
+path = "src/lib.rs"
+
+[dependencies]
+# Canonical, maintained (MIT/Apache) Rust OBD-II definitions. We depend on it for
+# the standard identifier enums (Mode 01 DataPid, service IDs, standards enums) and
+# build our Mode 06 monitor decoder in the same shape for an upstream `service06`
+# contribution — the crate has no monitor module today. Pinned exact (0.1.x, pre-1.0
+# churn) and used with minimal features so the only runtime dep is `strum`; their
+# enums are wrapped behind our own types to contain any churn to an adapter layer.
+automotive_diag = { version = "=0.1.28", default-features = false, features = ["obd2"] }

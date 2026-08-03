@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/decode",
+    "crates/decoderd",
+]
+
+# Shared metadata for all crates in the workspace. Keeping this centralized means
+# the library and the binary never drift apart on version or edition.
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/detello/obd-drift-monitor"
+
+[profile.release]
+# The decoder ships as a tiny native binary (Telegraf execd processor). Optimize
+# for size + speed and strip symbols to keep the Nix closure small.
+opt-level = 3
+lto = true
+strip = true
