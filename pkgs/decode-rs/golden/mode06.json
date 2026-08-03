@@ -1,0 +1,130 @@
+{
+  "_readme": [
+    "Frozen Mode 06 equivalence vectors. Committed DATA (facts), not code — the",
+    "hermetic gate for `nix flake check` (crates/decode/tests/golden.rs) and the",
+    "deployed-artifact gate (harness/test_equivalence.py, driving `decoderd`).",
+    "",
+    "`oracle` records who produced each `expected`:",
+    "  authored-j1979    — hand-authored from SAE J1979 UAS scaling (this project).",
+    "  python-obd        — regenerated + verified against python-OBD's monitor",
+    "                      decoder by harness/regen_golden.py (dev-only). Standard",
+    "                      UASIDs only; python-OBD silently drops manufacturer",
+    "                      (uasid & 0x80) monitors and has no 0xFFFF sentinel.",
+    "",
+    "`hex` is the full OBD response including the 0x46 service byte. Float fields",
+    "are compared with tolerance (python pint vs rust f64 are never bit-identical)."
+  ],
+  "cases": [
+    {
+      "name": "standard_voltage_pass",
+      "oracle": "python-obd",
+      "note": "UASID 0x0C = 0.01 V/count. 256 -> 2.56 V within [0, 5.0].",
+      "hex": "4601010C0100000001F4",
+      "expected": {
+        "records": [
+          {
+            "mid": 1, "tid": 1, "uasid": 12,
+            "test_value_raw": 256, "min_limit_raw": 0, "max_limit_raw": 500,
+            "test_value": 2.56, "min_limit": 0.0, "max_limit": 5.0,
+            "unit": "V", "name": null, "is_manufacturer_defined": false, "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "standard_voltage_fail",
+      "oracle": "python-obd",
+      "note": "768 -> 7.68 V exceeds max 5.0 V -> passed=false.",
+      "hex": "4601010C0300000001F4",
+      "expected": {
+        "records": [
+          {
+            "mid": 1, "tid": 1, "uasid": 12,
+            "test_value_raw": 768, "min_limit_raw": 0, "max_limit_raw": 500,
+            "test_value": 7.68, "min_limit": 0.0, "max_limit": 5.0,
+            "unit": "V", "name": null, "is_manufacturer_defined": false, "passed": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "temperature_offset",
+      "oracle": "python-obd",
+      "note": "UASID 0x16 = 0.1 degC, offset -40. 600 -> 20.0; MID 0x21.",
+      "hex": "462101160258000003E8",
+      "expected": {
+        "records": [
+          {
+            "mid": 33, "tid": 1, "uasid": 22,
+            "test_value_raw": 600, "min_limit_raw": 0, "max_limit_raw": 1000,
+            "test_value": 20.0, "min_limit": -40.0, "max_limit": 60.0,
+            "unit": "°C", "name": null, "is_manufacturer_defined": false, "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "multi_mid_regression",
+      "oracle": "python-obd",
+      "note": "Two records with DIFFERENT MIDs in one response — impossible under the old 7-byte header-MID framing. The core bug this rewrite fixes.",
+      "hex": "4601010C0064000000C821010C012C00000190",
+      "expected": {
+        "records": [
+          {
+            "mid": 1, "tid": 1, "uasid": 12,
+            "test_value_raw": 100, "min_limit_raw": 0, "max_limit_raw": 200,
+            "test_value": 1.0, "min_limit": 0.0, "max_limit": 2.0,
+            "unit": "V", "name": null, "is_manufacturer_defined": false, "passed": true
+          },
+          {
+            "mid": 33, "tid": 1, "uasid": 12,
+            "test_value_raw": 300, "min_limit_raw": 0, "max_limit_raw": 400,
+            "test_value": 3.0, "min_limit": 0.0, "max_limit": 4.0,
+            "unit": "V", "name": null, "is_manufacturer_defined": false, "passed": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "manufacturer_uasid_kept_raw",
+      "oracle": "authored-j1979",
+      "note": "UASID 0x85 (high bit set) — manufacturer-defined. python-OBD DROPS this; we keep it raw (this project's differentiator). No scaling/unit/pass.",
+      "hex": "46018585006400000258",
+      "expected": {
+        "records": [
+          {
+            "mid": 1, "tid": 133, "uasid": 133,
+            "test_value_raw": 100, "min_limit_raw": 0, "max_limit_raw": 600,
+            "test_value": null, "min_limit": null, "max_limit": null,
+            "unit": null, "name": null, "is_manufacturer_defined": true, "passed": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "sentinel_max_not_applicable",
+      "oracle": "authored-j1979",
+      "note": "max limit 0xFFFF = 'not applicable' sentinel -> passed=null. python-OBD has no sentinel handling (documented divergence).",
+      "hex": "4601010C01000000FFFF",
+      "expected": {
+        "records": [
+          {
+            "mid": 1, "tid": 1, "uasid": 12,
+            "test_value_raw": 256, "min_limit_raw": 0, "max_limit_raw": 65535,
+            "test_value": 2.56, "min_limit": 0.0, "max_limit": 655.35,
+            "unit": "V", "name": null, "is_manufacturer_defined": false, "passed": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "supported_mid_bitmap_empty",
+      "oracle": "authored-j1979",
+      "note": "[0x46, 0x00, <4-byte bitmap>] is a supported-MID bitmap, not test records -> empty.",
+      "hex": "4600FFFFFFFF",
+      "expected": {
+        "records": []
+      }
+    }
+  ]
+}

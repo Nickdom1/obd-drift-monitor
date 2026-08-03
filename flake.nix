@@ -11,12 +11,45 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
 
+        # Python env for the equivalence + benchmark harness. Pure stdlib + pytest;
+        # python-OBD is deliberately NOT here (see regenPythonEnv below).
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [
           pytest
           pytest-cov
-          # Decode library dependencies
-          # (none yet - pure stdlib for now)
         ]);
+
+        # The Rust decoder, built + unit/golden-tested once. buildRustPackage runs
+        # `cargo test` (incl. the frozen-vector golden gate) in its check phase and
+        # installs the `decoderd` binary. Reused as the `cargo-test` check AND fed
+        # to the pytest check so the harness drives the exact deployed artifact.
+        decoderPkg = pkgs.rustPlatform.buildRustPackage {
+          pname = "obd-decoder";
+          version = "0.1.0";
+          src = ./pkgs/decode-rs;
+          cargoLock.lockFile = ./pkgs/decode-rs/Cargo.lock;
+        };
+
+        # python-OBD (GPL-2.0) — the independent oracle for regen_golden.py only.
+        # DEV-ONLY: it lives exclusively in the `regen` dev shell, never in any
+        # `nix flake check` gate or shipped package, so the copyleft oracle stays
+        # out of the CI path and the artifact (the frozen vectors are data/facts).
+        # Not in nixpkgs, so packaged here from PyPI; deps (pint, pyserial) are.
+        python-obd = pkgs.python3Packages.buildPythonPackage rec {
+          pname = "obd";
+          version = "0.7.2";
+          format = "setuptools";
+          src = pkgs.fetchPypi {
+            inherit pname version;
+            hash = "sha256-INOMne09qtHor/qz/zZ6cHiNTymsd6t6rN3GptKkPWE=";
+          };
+          propagatedBuildInputs = with pkgs.python3Packages; [ pint pyserial ];
+          pythonRelaxDeps = [ "pint" "pyserial" ];
+          doCheck = false;
+          meta.license = pkgs.lib.licenses.gpl2Only;
+        };
+
+        # Python env that additionally carries the GPL oracle for the regen shell.
+        regenPythonEnv = pkgs.python3.withPackages (ps: [ ps.pytest python-obd ]);
 
       in
       {
@@ -48,12 +81,13 @@
             echo "🚗 OBD Drift Monitor development environment"
             echo ""
             echo "Available commands:"
-            echo "  pytest              - Run tests"
-            echo "  pytest --cov=pkgs   - Run tests with coverage"
-            echo "  ruff check .        - Lint Python code"
-            echo "  ruff format .       - Format Python code"
-            echo "  cargo test          - Run Rust decode tests (in pkgs/decode-rs)"
-            echo "  nix flake check     - Run all checks"
+            echo "  cargo test          - Rust decode tests + frozen-vector golden gate (pkgs/decode-rs)"
+            echo "  pytest harness/     - Drive decoderd over the golden corpus (build decoderd first)"
+            echo "  ruff check harness/ - Lint the Python harness"
+            echo "  nix flake check     - Run all checks (gate on individual checks; see CLAUDE.md)"
+            echo ""
+            echo "Oracle regen (GPL python-OBD, dev-only shell):"
+            echo "  nix develop .#regen --command python harness/regen_golden.py"
             echo ""
             echo "CAN utilities (for hardware work):"
             echo "  candump, cansend, isotpsend, isotprecv"
@@ -63,25 +97,40 @@
           '';
         };
 
-        # Checks run by 'nix flake check'
+        # Dev-only shell carrying python-OBD (GPL-2.0) for seeding/verifying the
+        # golden vectors against the oracle. Isolated from the default shell so the
+        # copyleft dependency never touches the mainline dev flow or the checks.
+        devShells.regen = pkgs.mkShell {
+          buildInputs = with pkgs; [ regenPythonEnv cargo rustc git ];
+          shellHook = ''
+            echo "🔬 regen shell — python-OBD oracle available (GPL-2.0, dev-only)"
+            echo "  python harness/regen_golden.py          # verify golden vs python-OBD"
+            echo "  python harness/regen_golden.py --write   # persist regenerated vectors"
+          '';
+        };
+
+        # Checks run by 'nix flake check'. (Aggregate check stays red on the Phase-7
+        # gateway placeholder; gate on these individual checks meanwhile.)
         checks = {
+          # Rust decode crate: unit tests + the hermetic frozen-vector golden gate.
+          cargo-test = decoderPkg;
+
+          # Equivalence over the deployed artifact: drive the real decoderd binary
+          # across the golden corpus and assert its JSON matches the frozen expected.
           pytest = pkgs.stdenv.mkDerivation {
             name = "obd-drift-monitor-pytest";
             src = ./.;
 
-            buildInputs = [ pythonEnv ];
+            nativeBuildInputs = [ pythonEnv decoderPkg ];
 
             buildPhase = ''
-              # Set up Python path to find our packages
-              export PYTHONPATH=$src:$PYTHONPATH
-
-              # Run pytest
-              pytest pkgs/ --verbose
+              export DECODERD=${decoderPkg}/bin/decoderd
+              pytest harness/ --verbose
             '';
 
             installPhase = ''
               mkdir -p $out
-              echo "Tests passed" > $out/result
+              echo "Equivalence tests passed" > $out/result
             '';
           };
 
@@ -89,44 +138,16 @@
             name = "obd-drift-monitor-ruff";
             src = ./.;
 
-            buildInputs = [ pkgs.ruff ];
+            nativeBuildInputs = [ pkgs.ruff ];
 
             buildPhase = ''
-              ruff check pkgs/
+              ruff check harness/
             '';
 
             installPhase = ''
               mkdir -p $out
               echo "Ruff checks passed" > $out/result
             '';
-          };
-
-          # Rust decode crate: buildRustPackage runs `cargo test` in its check
-          # phase, so this builds the workspace and gates on the unit tests.
-          cargo-test = pkgs.rustPlatform.buildRustPackage {
-            pname = "obd-decode-rs";
-            version = "0.1.0";
-            src = ./pkgs/decode-rs;
-            cargoLock.lockFile = ./pkgs/decode-rs/Cargo.lock;
-          };
-        };
-
-        # Package for the decode library (standalone)
-        packages.decode = pkgs.python3Packages.buildPythonPackage {
-          pname = "obd-decode";
-          version = "0.1.0";
-          src = ./pkgs/decode;
-
-          propagatedBuildInputs = [ ];
-
-          checkInputs = with pkgs.python3Packages; [ pytest ];
-          checkPhase = ''
-            pytest
-          '';
-
-          meta = with pkgs.lib; {
-            description = "OBD-II Mode 01 and Mode 06 decoder library";
-            license = licenses.mit;
           };
         };
       }

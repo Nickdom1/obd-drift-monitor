@@ -14,8 +14,11 @@ This file provides context for AI agents (Claude, Copilot, Cursor, etc.) working
 > **Rust** (`pkgs/decode-rs/`), fixing a real Mode 06 framing bug (7-byte legacy vs correct 9-byte
 > CAN records). Python is retained **only** as the equivalence/benchmark harness and oracle
 > (python-OBD). See `docs/private/rust-conversion-plan.md` for the full plan and phase status.
-> Phases 1–2 (scaffold + decoders) and the nixpkgs bump are done; Phase 3 (equivalence harness +
-> frozen golden vectors) is next and begins by deleting the old buggy Python decoder in `pkgs/decode/`.
+> Phases 1–2 (scaffold + decoders) and the nixpkgs bump are done. Phase 3 is in progress: the old
+> buggy Python decoder (`pkgs/decode/`) is **deleted**, and the equivalence harness + frozen golden
+> vectors are in place — a hermetic `tests/golden.rs` gate plus `decoderd` driven over
+> `pkgs/decode-rs/golden/mode06.json` by `harness/test_equivalence.py`. python-OBD is the oracle for
+> the standard-UASID subset via the dev-only `harness/regen_golden.py` (run in `nix develop .#regen`).
 
 ## Build and Test Commands
 
@@ -32,8 +35,11 @@ cargo bench           # criterion (Phase 4+)
 pytest harness/
 
 # Lint / format Python (harness)
-ruff check .
-ruff format .
+ruff check harness/
+ruff format harness/
+
+# Seed / verify golden vectors against the python-OBD oracle (GPL, dev-only shell)
+nix develop .#regen --command python harness/regen_golden.py
 
 # Individual flake checks (aggregate `nix flake check` is red until Phase 7 fixes
 # the gateway placeholder — gate on the individual checks meanwhile):
@@ -55,11 +61,13 @@ obd-drift-monitor/
 ├── pkgs/
 │   ├── decode-rs/       # SHIPPED decoder — Rust (pure lib, no I/O)
 │   │   ├── crates/decode/    # lib: mode06.rs (9-byte fix), mode01.rs, bitmap.rs, table.rs, types.rs
+│   │   │   └── tests/golden.rs   # hermetic frozen-vector equivalence gate
 │   │   ├── crates/decoderd/  # thin bin: JSON-lines stdin->stdout (== Telegraf execd processor)
+│   │   ├── golden/mode06.json    # frozen oracle vectors (committed data)
+│   │   ├── decode_table.csv      # mid,tid → name + covered_by_offtheshelf boundary
 │   │   └── Cargo.toml / rust-toolchain.toml
-│   ├── decode/          # OLD Python decoder — buggy 7-byte framing, TO BE DELETED in Phase 3
 │   └── gateway/         # NixOS configuration for the ProDesk appliance (week 2+)
-├── harness/             # Python: equivalence + benchmark oracle (survives here only; Phase 3)
+├── harness/             # Python (harness ONLY): test_equivalence.py (CI), regen_golden.py (dev)
 ├── fixtures/            # Real OBD captures, VIN-scrubbed (populated day 3+)
 ├── flake.nix            # Nix devShell + Rust/Python checks + gateway build
 ├── CLAUDE.md            # This file
@@ -69,11 +77,13 @@ obd-drift-monitor/
 
 ## Coding Conventions
 
-### Python
+### Python (harness ONLY — no shipped Python decoder)
 - **Style:** PEP 8, enforced by `ruff`
-- **Testing:** pytest with fixtures in `tests/` subdirectories
+- **Testing:** pytest; the harness lives in `harness/`
 - **Type hints:** Encouraged but not required for week 1
-- **Decode library philosophy:** Pure functions, no I/O. Parse bytes → return structured data. Never touch sockets, files, or databases inside `pkgs/decode/`.
+- **Role:** Python survives only as the equivalence/benchmark harness. `test_equivalence.py` drives
+  the `decoderd` binary over the frozen golden corpus (no `import obd`); `regen_golden.py` is the
+  dev-only oracle path that imports python-OBD (GPL, `nix develop .#regen`) to seed/verify vectors.
 
 ### Rust (shipped decoder — `pkgs/decode-rs/`)
 - **Philosophy:** pure functions, no I/O in `crates/decode/` (bytes → structured data).
