@@ -19,9 +19,14 @@ by a multi-node VM test.
 **Current phase:** Pre-hardware reconnaissance and decode-library development.
 
 - ✅ Architecture accepted (`docs/design/architecture.md`)
-- ✅ Pure-Python decode library for Mode 01 / Mode 06 with golden tests (45 passing)
-- ✅ Decode-table skeleton (`pkgs/decode/decode_table.csv`)
-- 🚧 ADR 0003 (collector choice) — in progress
+- ✅ ADR 0003 accepted — Telegraf for the MQTT→Postgres pipeline (`docs/adr/0003-collector-choice.md`)
+- ✅ **Rust** decode library for Mode 01 / Mode 06 (`pkgs/decode-rs/`), shipped as a small
+  `decoderd` binary — rewritten from Python to fix a Mode 06 framing bug (7-byte legacy vs correct
+  9-byte CAN records) and fill a gap no maintained Rust crate covers
+- ✅ Equivalence harness: frozen golden vectors gated hermetically (`cargo test`) and against the
+  deployed `decoderd` binary (`pytest`), cross-checked to the python-OBD oracle
+- ✅ Decode-table skeleton (`pkgs/decode-rs/decode_table.csv`)
+- ⏳ Benchmark + Nix-packaged decoder + repo/hardware decoupling (Phases 4–7)
 - ⏳ Hardware on order (CANable Pro, WiCAN Pro, OBDLink SX, ProDesk mini)
 - ⏳ First VIN-scrubbed trip fixtures (arrive with the car work)
 
@@ -43,9 +48,9 @@ by a multi-node VM test.
 ```
 
 Decode runs on the gateway (not the ESP32) so it can be iterated without a firmware flash.
-Telegraf consumes MQTT, decodes via the shared decode library, and writes to a hand-tuned
-PostgreSQL 16 (native range partitioning + BRIN — **no Timescale**; the data volume
-doesn't warrant an extension). Grafana reads Postgres locally; the VPS stores no telemetry
+Telegraf consumes MQTT and decodes via `decoderd` — the same Rust binary the tests drive, run as
+an `execd` processor — then writes to a hand-tuned PostgreSQL 16 (native range partitioning + BRIN
+— **no Timescale**; the data volume doesn't warrant an extension). Grafana reads Postgres locally; the VPS stores no telemetry
 and only reverse-proxies a read-only dashboard over the overlay network.
 
 See [docs/design/architecture.md](docs/design/architecture.md) for the full design,
@@ -77,9 +82,11 @@ obd-drift-monitor/
 │   ├── design/          # architecture.md — the technical anchor
 │   └── adr/             # Architecture Decision Records (immutable once written)
 ├── pkgs/
-│   └── decode/          # pure Python decode library (no I/O) + decode_table.csv + tests
+│   └── decode-rs/       # pure Rust decode library (no I/O) + decoderd bin + golden vectors
+│                        # + decode_table.csv; execd processor for Telegraf
+├── harness/             # Python (harness only): equivalence gate + python-OBD oracle regen
 ├── fixtures/            # real OBD captures, VIN-scrubbed (populated once hardware lands)
-├── flake.nix            # Nix devShell + decode package + checks + gateway config
+├── flake.nix            # Nix devShell + Rust/Python checks + gateway config
 ├── CLAUDE.md            # agent context and conventions
 └── LICENSE              # MIT
 ```
@@ -87,17 +94,23 @@ obd-drift-monitor/
 ## Quick start
 
 ```bash
-# Enter the dev environment (Python 3.11 + pytest + ruff + can-utils)
+# Enter the dev environment (Rust + Python 3.13 + pytest + ruff + can-utils)
 nix develop
 
-# Run the decode-library tests
-pytest
+# Decode library: unit/regression tests + the frozen-vector golden gate
+cd pkgs/decode-rs && cargo test
 
-# Lint
-ruff check pkgs/
+# Equivalence harness: drive the decoderd binary over the golden corpus
+pytest harness/
 
-# Run everything the CI gate runs (tests + lints)
-nix flake check
+# Lint the harness
+ruff check harness/
+
+# Individual CI checks (the aggregate `nix flake check` stays red on the
+# gateway placeholder until Phase 7 — gate on these meanwhile):
+nix build .#checks.x86_64-linux.cargo-test
+nix build .#checks.x86_64-linux.pytest
+nix build .#checks.x86_64-linux.ruff-check
 ```
 
 If you don't use Nix, see [docs/NIX-SETUP.md](docs/NIX-SETUP.md) for setup notes.

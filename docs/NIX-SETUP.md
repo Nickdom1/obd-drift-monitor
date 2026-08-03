@@ -1,7 +1,8 @@
 # Nix Setup Guide
 
-The project is a Nix flake. Everything — dev shell, checks, the decode package, and the
-gateway config — is defined in `flake.nix`.
+The project is a Nix flake. Everything — dev shell, checks, and the gateway config — is
+defined in `flake.nix`. The shipped decoder is Rust (`pkgs/decode-rs/`); Python survives
+only as the equivalence/benchmark harness (`harness/`).
 
 ## Quick start
 
@@ -9,31 +10,42 @@ gateway config — is defined in `flake.nix`.
 # Enter the development shell
 nix develop
 
-# Run the decode-library tests
-pytest
+# Decode library: unit/regression tests + the frozen-vector golden gate
+cd pkgs/decode-rs && cargo test
 
-# Lint
-ruff check pkgs/
+# Equivalence harness: drive the decoderd binary over the golden corpus
+pytest harness/
 
-# Run everything the CI gate runs (tests + lints)
-nix flake check
+# Lint the harness
+ruff check harness/
+
+# Individual CI checks (see note below — the aggregate is red on the gateway placeholder)
+nix build .#checks.x86_64-linux.cargo-test
+nix build .#checks.x86_64-linux.pytest
+nix build .#checks.x86_64-linux.ruff-check
 ```
+
+> **Note:** aggregate `nix flake check` stays **red** until Phase 7 fixes the gateway
+> placeholder (it has no root `fileSystems`). Gate on the three individual checks meanwhile.
 
 ## What the flake provides
 
 1. **Dev shell** (`nix develop`)
-   - Python 3.11 with `pytest` and `pytest-cov`
+   - Rust toolchain (`cargo`, `rustc`, `clippy`, `rustfmt`) for the decode crate
+   - Python 3.13 with `pytest` and `pytest-cov` (harness)
    - `ruff` for linting and formatting
    - `can-utils` (`candump`, `cansend`, `isotpsend`, `isotprecv`) for bench work
-   - `dfu-util` for flashing CANable firmware
-   - `git`
+   - `dfu-util` for flashing CANable firmware, `git`
 
-2. **Checks** (`nix flake check`)
-   - Runs pytest over `pkgs/`
-   - Runs ruff over `pkgs/`
+2. **Regen dev shell** (`nix develop .#regen`)
+   - Adds **python-OBD** (GPL-2.0, dev-only oracle) for `harness/regen_golden.py`
+   - Isolated from the default shell and every check so the copyleft dep never enters CI
 
-3. **Packages**
-   - `decode` — the standalone Python decode library (`nix build .#decode`)
+3. **Checks** (individual: `nix build .#checks.x86_64-linux.<name>`)
+   - `cargo-test` — builds the workspace + `decoderd`, runs Rust unit/regression tests and
+     the hermetic `tests/golden.rs` frozen-vector gate
+   - `pytest` — drives the built `decoderd` over the golden corpus (`harness/`)
+   - `ruff-check` — lints `harness/`
 
 4. **NixOS configuration** (`nixosConfigurations.gateway`)
    - Placeholder for the ProDesk appliance; fleshed out when hardware arrives
@@ -44,15 +56,17 @@ nix flake check
 ```bash
 nix develop
 
-pytest                                   # all tests
-pytest --cov=pkgs --cov-report=html      # with coverage
-pytest pkgs/decode/tests/test_mode06.py -v   # a single file
+cd pkgs/decode-rs && cargo test          # Rust unit + regression + golden gate
+cargo clippy --all-targets               # lint the Rust
+cd .. && pytest harness/ -v              # equivalence over the decoderd binary
 ```
 
-## Building the decode package
+## Building the decoder
 
 ```bash
-nix build .#decode      # result symlink appears at ./result
+# A standalone `packages.decoder` output + overlay lands in Phase 5. For now the
+# decoder is built (and tested) by the cargo-test check, or directly:
+cd pkgs/decode-rs && cargo build --release   # binary at target/release/decoderd
 ```
 
 ## Gateway configuration (Week 2+)

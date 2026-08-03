@@ -161,7 +161,7 @@ This column **draws the boundary** between solved problems (what Torque/OBD Auto
 ┌──────▼──────────────────┐
 │  Gateway (ProDesk)      │
 │  ┌──────────────────┐   │
-│  │ Telegraf         │   │  MQTT consumer → Starlark decode → Postgres
+│  │ Telegraf         │   │  MQTT consumer → decoderd (execd) decode → Postgres
 │  │ (mqtt_consumer)  │   │
 │  └────┬─────────────┘   │
 │       │                 │

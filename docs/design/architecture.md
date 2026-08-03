@@ -76,7 +76,7 @@ behind a firmware-flash cycle.
 | Edge collector | WiCAN Pro | ESP32-S3, CAN transceiver, <1 mA sleep, SD buffering, MQTT — an edge device with no firmware work on the critical path | 0001 |
 | Gateway | Used HP ProDesk/EliteDesk mini (i5-8500T-class, 16 GB, NVMe) | x86_64 + KVM in one box: appliance, CI runner, and VM-test host | 0002 |
 | Broker | Mosquitto (`services.mosquitto`) | Stock nixpkgs; TLS + auth declaratively | — |
-| Pipeline | Telegraf: `mqtt_consumer` in, decode as a `starlark`/`execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; decode stays a pure library shared with tests | 0003 |
+| Pipeline | Telegraf: `mqtt_consumer` in, decode via the `decoderd` `execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; a native Rust binary makes `execd` the clear choice over Starlark (see rust-conversion-plan §6) | 0003 |
 | Database | PostgreSQL 16, native range partitioning, **no Timescale** | Hand-tuned partitions + BRIN + autovacuum/WAL settings; the data volume doesn't warrant an extension | 0004 |
 | Dashboards | Grafana (`services.grafana`), datasources + dashboards provisioned from JSON in-repo | Dashboards-as-code | — |
 | Overlay | Self-hosted overlay network (self-hosted CA, group firewall rules in Nix) | No third-party control plane; zero inbound ports at home | 0005 |
