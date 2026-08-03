@@ -10,26 +10,36 @@ This file provides context for AI agents (Claude, Copilot, Cursor, etc.) working
 
 **Current phase:** Week 1 — decode library development and hardware reconnaissance (pre-hardware, laptop-only work).
 
+> **Active work: Rust decode conversion (in progress).** The shipped decoder is being rewritten in
+> **Rust** (`pkgs/decode-rs/`), fixing a real Mode 06 framing bug (7-byte legacy vs correct 9-byte
+> CAN records). Python is retained **only** as the equivalence/benchmark harness and oracle
+> (python-OBD). See `docs/private/rust-conversion-plan.md` for the full plan and phase status.
+> Phases 1–2 (scaffold + decoders) and the nixpkgs bump are done; Phase 3 (equivalence harness +
+> frozen golden vectors) is next and begins by deleting the old buggy Python decoder in `pkgs/decode/`.
+
 ## Build and Test Commands
 
 ```bash
 # Enter the development environment
 nix develop
 
-# Run tests
-pytest
+# Rust decode library (shipped decoder) — run from pkgs/decode-rs/
+cargo test            # unit + regression tests
+cargo clippy --all-targets
+cargo bench           # criterion (Phase 4+)
 
-# Run tests with coverage
-pytest --cov=pkgs
+# Python harness (equivalence + benchmark oracle) — Phase 3+
+pytest harness/
 
-# Lint Python code
+# Lint / format Python (harness)
 ruff check .
-
-# Format Python code
 ruff format .
 
-# Run all checks (tests + lints)
-nix flake check
+# Individual flake checks (aggregate `nix flake check` is red until Phase 7 fixes
+# the gateway placeholder — gate on the individual checks meanwhile):
+nix build .#checks.x86_64-linux.cargo-test
+nix build .#checks.x86_64-linux.pytest
+nix build .#checks.x86_64-linux.ruff-check
 ```
 
 ## Repository Structure
@@ -43,15 +53,15 @@ obd-drift-monitor/
 │   └── adr/             # Architecture Decision Records (numbered, immutable once written)
 │       └── 0003-collector-choice.md (coming)
 ├── pkgs/
-│   ├── decode/          # Pure Python decode library (no I/O, just parse functions)
-│   │   ├── __init__.py
-│   │   ├── mode06.py    # parse_mode06(bytes) -> [MonitorResult]
-│   │   ├── mode01.py    # parse_mode01(bytes) -> [PidValue]
-│   │   ├── decode_table.csv  # MID/TID definitions with scaling and coverage
-│   │   └── tests/
+│   ├── decode-rs/       # SHIPPED decoder — Rust (pure lib, no I/O)
+│   │   ├── crates/decode/    # lib: mode06.rs (9-byte fix), mode01.rs, bitmap.rs, table.rs, types.rs
+│   │   ├── crates/decoderd/  # thin bin: JSON-lines stdin->stdout (== Telegraf execd processor)
+│   │   └── Cargo.toml / rust-toolchain.toml
+│   ├── decode/          # OLD Python decoder — buggy 7-byte framing, TO BE DELETED in Phase 3
 │   └── gateway/         # NixOS configuration for the ProDesk appliance (week 2+)
+├── harness/             # Python: equivalence + benchmark oracle (survives here only; Phase 3)
 ├── fixtures/            # Real OBD captures, VIN-scrubbed (populated day 3+)
-├── flake.nix            # Nix devShell + gateway build + checks
+├── flake.nix            # Nix devShell + Rust/Python checks + gateway build
 ├── CLAUDE.md            # This file
 ├── README.md            # Public-facing project pitch
 └── LICENSE              # MIT
@@ -65,8 +75,16 @@ obd-drift-monitor/
 - **Type hints:** Encouraged but not required for week 1
 - **Decode library philosophy:** Pure functions, no I/O. Parse bytes → return structured data. Never touch sockets, files, or databases inside `pkgs/decode/`.
 
+### Rust (shipped decoder — `pkgs/decode-rs/`)
+- **Philosophy:** pure functions, no I/O in `crates/decode/` (bytes → structured data).
+- **Dependency:** `automotive_diag` (MIT/Apache) for canonical Mode 01 `DataPid`/standards enums,
+  pinned `=0.1.28`, minimal features (obd2 only; runtime dep = `strum`), wrapped behind our own
+  types to contain pre-1.0 churn. Mode 06 is built in a `service06`-shaped module for an upstream PR.
+- **Testing:** `cargo test` unit + regression; equivalence via the Python harness + frozen golden vectors.
+
 ### Nix
-- **Pinned inputs:** `nixpkgs` locked to 24.05 for reproducibility
+- **Pinned inputs:** `nixpkgs` locked to **nixos-26.05** (rustc 1.95, Python 3.13) — bumped from the
+  stale 24.05 pin during the Rust conversion.
 - **Checks:** `flake.nix` defines checks that run on `nix flake check` — tests MUST pass before commits to main
 - **Gateway config:** Lives in `nixosConfigurations.gateway` — flesh out when hardware arrives
 

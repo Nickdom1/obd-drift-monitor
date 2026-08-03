@@ -17,8 +17,11 @@ This document is the technical anchor. Decisions with alternatives get an ADR in
 
 **In scope (MVP):**
 - A NixOS gateway appliance built from a flake: broker, pipeline, database, dashboards.
-- A pure Python decode library for OBD-II Mode 01 / Mode 06, reused verbatim by tests
-  and by the pipeline's decode step.
+- A pure **Rust** decode library for OBD-II Mode 01 / Mode 06 (`pkgs/decode-rs/`), shipped as a
+  small native binary (`decoderd`) reused by the pipeline's decode step (Telegraf `execd`) and
+  proven correct by a Python equivalence harness against the python-OBD oracle. (The decoder was
+  rewritten from Python to Rust to fix a Mode 06 framing bug and fill a real Rust-ecosystem gap —
+  see `docs/private/rust-conversion-plan.md`. Python is retained only as the harness.)
 - A multi-node QEMU integration test: recorded telemetry replayed in, asserted through
   to the dashboard API.
 - Storage of Mode 06 monitor results as a **time series** — the piece existing tools
@@ -88,7 +91,8 @@ flake.nix                     # devShell, packages, nixosConfigurations, checks
 hosts/gateway/                # the appliance
 hosts/vps/                    # lighthouse + nginx
 modules/{pipeline,telemetry-db,dashboards,overlay,...}/
-pkgs/decode/                  # pure decode library + Telegraf plugin shim + dockerTools image
+pkgs/decode-rs/               # pure Rust decode library + decoderd bin (execd processor) + Nix pkg
+harness/                      # Python equivalence + benchmark harness (oracle: python-OBD)
 tests/e2e.nix                 # the multi-node VM test
 tests/fixtures/               # recorded trips (small ones in-repo)
 dashboards/*.json
