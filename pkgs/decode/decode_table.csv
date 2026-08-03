@@ -1,0 +1,27 @@
+mid,tid,name,uasid,scale,offset,unit,source,covered_by_offtheshelf
+# Mode 06 Decode Table - Monitor Test Results
+#
+# Columns:
+#   mid: Monitor ID (hex, 0x01-0xFF)
+#   tid: Test ID (hex, 0x00-0xFF; high bit set = manufacturer-defined UASID)
+#   name: Human-readable test name
+#   uasid: Unit and Scaling ID (low 7 bits of TID if standardized)
+#   scale: Scaling factor (multiply raw value by this)
+#   offset: Offset to add after scaling (scaled_value = raw * scale + offset)
+#   unit: Unit string (V, mA, °C, counts, etc.)
+#   source: verified | J1979-summary | manufacturer-reverse-engineered | unknown
+#   covered_by_offtheshelf: named+scaled | raw-only | absent
+#
+# Rows are added from real car captures, each verified against the oracle
+# (OBDLink SX) before it lands here. Manufacturer-specific monitors have the
+# TID high bit set (UASID).
+#
+# Notes:
+# - UASIDs 0x01-0x7F are standardized per J1979 Table A.1
+# - Common scalings:
+#   - Voltage: 0.00488 V/count (5V / 1024)
+#   - Percent: 0.00390625 %/count (100% / 256)
+#   - Temperature: 1.0 count/°C, offset -40
+#   - Time: 1.0 ms/count or 0.1 ms/count depending on UASID
+# - covered_by_offtheshelf will be filled by oracle passes (OBD Auto Doctor, Torque Pro)
+#   on Day 2 to map the "already solved" vs "this project's contribution" boundary
