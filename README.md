@@ -2,11 +2,17 @@
 
 **Your car grades its own health; this project keeps the report cards.**
 
+*Drift* here means **sensor drift** — an emissions or powertrain sensor slowly wandering out
+of its reference range over weeks and months — **not** the motorsport kind. Readings are
+captured at the **CAN-bus level** (a WiCAN / SocketCAN interface wired to the OBD-II port),
+so we work with raw frames rather than a consumer ELM327 scan-tool abstraction — which is
+part of why Mode 06 (flaky on many ELM327 clones) is reachable at all.
+
 Modern vehicles continuously run self-diagnostics on dozens of emissions-critical
 sensors. These "Monitor Test Results" (OBD-II Mode 06) expose real values, min/max
 limits, and pass/fail status — but existing scan tools only show snapshots. This project
 stores monitor results as a **time series** in Postgres and renders value-vs-limit margin
-over time, so degradation is visible as a trend rather than caught only when a fault code
+over time, so drift is visible as a trend rather than caught only when a fault code
 finally trips.
 
 The car is the testbed, not the topic. The deliverable is a small, reproducible,
