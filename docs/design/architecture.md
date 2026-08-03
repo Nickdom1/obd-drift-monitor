@@ -21,7 +21,7 @@ This document is the technical anchor. Decisions with alternatives get an ADR in
   small native binary (`decoderd`) reused by the pipeline's decode step (Telegraf `execd`) and
   proven correct by a Python equivalence harness against the python-OBD oracle. (The decoder was
   rewritten from Python to Rust to fix a Mode 06 framing bug and fill a real Rust-ecosystem gap —
-  see `docs/private/rust-conversion-plan.md`. Python is retained only as the harness.)
+  see [ADR 0002](../adr/0002-rust-decode-rewrite.md). Python is retained only as the harness.)
 - A multi-node QEMU integration test: recorded telemetry replayed in, asserted through
   to the dashboard API.
 - Storage of Mode 06 monitor results as a **time series** — the piece existing tools
@@ -71,16 +71,20 @@ behind a firmware-flash cycle.
 
 ### Component decisions
 
+ADRs are a log, numbered as written — not pre-reserved. A decision that warrants a record but
+hasn't been made/written yet is marked *planned*; it gets the next free number when it lands.
+
 | Component | Choice | Rationale | ADR |
 |---|---|---|---|
-| Edge collector | WiCAN Pro | ESP32-S3, CAN transceiver, <1 mA sleep, SD buffering, MQTT — an edge device with no firmware work on the critical path | 0001 |
-| Gateway | Used HP ProDesk/EliteDesk mini (i5-8500T-class, 16 GB, NVMe) | x86_64 + KVM in one box: appliance, CI runner, and VM-test host | 0002 |
+| Pipeline | Telegraf: `mqtt_consumer` in, decode via the `decoderd` `execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; a native Rust binary makes `execd` the clear choice over Starlark | [0001](../adr/0001-collector-choice.md) |
+| Decode library | Pure **Rust** (`decode-rs`), shipped as `decoderd`; python-OBD as oracle only | Fixes a Mode 06 framing bug, fills a Rust-ecosystem gap, native `execd` fit; proven by equivalence against a GPL-clean frozen oracle | [0002](../adr/0002-rust-decode-rewrite.md) |
+| Edge collector | WiCAN Pro | ESP32-S3, CAN transceiver, <1 mA sleep, SD buffering, MQTT — an edge device with no firmware work on the critical path | planned |
+| Gateway | Used HP ProDesk/EliteDesk mini (i5-8500T-class, 16 GB, NVMe) | x86_64 + KVM in one box: appliance, CI runner, and VM-test host | planned |
 | Broker | Mosquitto (`services.mosquitto`) | Stock nixpkgs; TLS + auth declaratively | — |
-| Pipeline | Telegraf: `mqtt_consumer` in, decode via the `decoderd` `execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; a native Rust binary makes `execd` the clear choice over Starlark (see rust-conversion-plan §6) | 0003 |
-| Database | PostgreSQL 16, native range partitioning, **no Timescale** | Hand-tuned partitions + BRIN + autovacuum/WAL settings; the data volume doesn't warrant an extension | 0004 |
+| Database | PostgreSQL 16, native range partitioning, **no Timescale** | Hand-tuned partitions + BRIN + autovacuum/WAL settings; the data volume doesn't warrant an extension | planned |
 | Dashboards | Grafana (`services.grafana`), datasources + dashboards provisioned from JSON in-repo | Dashboards-as-code | — |
-| Overlay | Self-hosted overlay network (self-hosted CA, group firewall rules in Nix) | No third-party control plane; zero inbound ports at home | 0005 |
-| CI | Hosted git project + self-hosted KVM `gitlab-runner` on the gateway | A self-hosted runner keeps VM tests in the pipeline without a heavy CI install | 0007 |
+| Overlay | Self-hosted overlay network (self-hosted CA, group firewall rules in Nix) | No third-party control plane; zero inbound ports at home | planned |
+| CI | Hosted git project + self-hosted KVM `gitlab-runner` on the gateway | A self-hosted runner keeps VM tests in the pipeline without a heavy CI install | planned |
 | Cloud archive | Object storage: rclone timer for raw logs, WAL-G for base backups + WAL | Lifecycle tiering; cost at this volume is negligible | — |
 | Deploys | deploy-rs from CI (manual gate) | Config-as-code, push-button | — |
 
@@ -100,6 +104,22 @@ docs/design/architecture.md   # this file
 docs/adr/*.md
 CLAUDE.md
 ```
+
+### Hardware (bill of materials)
+
+Target vehicle: **2018 Honda Accord** (the architecture is vehicle-agnostic; the decode table
+starts Accord-specific and expands as more vehicles are captured).
+
+| Component | Purpose | ~Cost |
+|---|---|---|
+| WiCAN Pro | In-vehicle ESP32-S3 CAN→MQTT gateway | $90 |
+| CANable Pro (isolated) | USB-to-CAN bench tool | $60 |
+| OBDLink SX USB | Oracle — verify decode against commercial ELM327 firmware | $30 |
+| HP ProDesk/EliteDesk 800 G4 Mini | Gateway appliance (used) | $110 |
+| OBD2 1-to-2 splitter | Bench testing with oracle + CANable simultaneously | $12 |
+
+**Total:** ~$300, plus a battery maintainer (for key-on-engine-off polling) and a high-endurance
+microSD (WiCAN offline buffer).
 
 ---
 
@@ -130,7 +150,9 @@ it at scale, and the write-up says plainly that the data volume doesn't require 
 ## 4. Testing strategy
 
 **Unit/decode tests:** the decode library is exercised against recorded fixtures — every
-MID observed in week 1 gets at least one golden-value test (`nix flake check`).
+MID observed in week 1 gets at least one golden-value test (`nix flake check`). Decode
+throughput is tracked by a criterion benchmark against a python-OBD baseline — see
+[benchmark.md](benchmark.md) (correctness first; speed is a measured secondary).
 
 **End-to-end test (`tests/e2e.nix`)** — telemetry in, rendered dashboard out:
 
@@ -203,6 +225,7 @@ exactly that boundary.
 ## 7. Working method
 
 - **Living design, accumulating ADRs.** This document is kept true as the build proceeds;
-  decisions with alternatives are captured in `docs/adr/` and are immutable once written.
+  decisions with alternatives are captured in `docs/adr/`, numbered as written, and immutable
+  once published (pre-release, the set may still be renumbered to stay clean).
 - **Cadence:** public repo, small commits, and a short tutorial-style post as each piece
   lands (the Mode 06 dump script, the pipeline config, the VM replay test).

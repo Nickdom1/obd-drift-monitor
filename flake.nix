@@ -109,8 +109,9 @@
           '';
         };
 
-        # Checks run by 'nix flake check'. (Aggregate check stays red on the Phase-7
-        # gateway placeholder; gate on these individual checks meanwhile.)
+        # Checks run by 'nix flake check'. The aggregate now goes green: the gateway
+        # placeholder gained a nominal root fileSystems entry so it evaluates. Full
+        # gateway/hardware decoupling is still Phase 7; this is just the eval fix.
         checks = {
           # Rust decode crate: unit tests + the hermetic frozen-vector golden gate.
           cargo-test = decoderPkg;
@@ -160,7 +161,17 @@
           # Hardware configuration will be generated on the physical box
           # For now, just a placeholder structure
           ({ pkgs, ... }: {
-            system.stateVersion = "24.05";
+            system.stateVersion = "26.05";
+
+            # Placeholder root filesystem so the config *evaluates* (a NixOS system
+            # needs a root fileSystems entry to build its toplevel). This is not real
+            # hardware detail — it is replaced by a generated hardware-configuration.nix
+            # when the appliance (ProDesk, or an interim laptop) is flashed. Its only
+            # job today is to keep the aggregate `nix flake check` green.
+            fileSystems."/" = {
+              device = "/dev/disk/by-label/nixos";
+              fsType = "ext4";
+            };
 
             # Minimal base - flesh out when hardware arrives
             boot.loader.systemd-boot.enable = true;

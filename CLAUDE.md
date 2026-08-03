@@ -41,8 +41,11 @@ ruff format harness/
 # Seed / verify golden vectors against the python-OBD oracle (GPL, dev-only shell)
 nix develop .#regen --command python harness/regen_golden.py
 
-# Individual flake checks (aggregate `nix flake check` is red until Phase 7 fixes
-# the gateway placeholder — gate on the individual checks meanwhile):
+# Aggregate check (now green — the gateway placeholder gained a nominal root
+# fileSystems entry so it evaluates; full hardware decoupling is still Phase 7):
+nix flake check
+
+# Individual flake checks (still useful for targeting one gate):
 nix build .#checks.x86_64-linux.cargo-test
 nix build .#checks.x86_64-linux.pytest
 nix build .#checks.x86_64-linux.ruff-check
@@ -56,8 +59,9 @@ obd-drift-monitor/
 │   ├── design/          # Living design documents (agents update these per findings)
 │   │   └── architecture.md
 │   ├── private/         # personal strategy/planning notes — gitignored, not published
-│   └── adr/             # Architecture Decision Records (numbered, immutable once written)
-│       └── 0003-collector-choice.md (coming)
+│   └── adr/             # Architecture Decision Records (numbered as written, immutable once published)
+│       ├── 0001-collector-choice.md       # Telegraf for MQTT→Postgres
+│       └── 0002-rust-decode-rewrite.md    # Rust decoder + python-OBD oracle strategy
 ├── pkgs/
 │   ├── decode-rs/       # SHIPPED decoder — Rust (pure lib, no I/O)
 │   │   ├── crates/decode/    # lib: mode06.rs (9-byte fix), mode01.rs, bitmap.rs, table.rs, types.rs
@@ -109,11 +113,11 @@ obd-drift-monitor/
 - `docs/design/architecture.md` is the **strategic anchor** — consult it before making architectural decisions
 - Deeper strategy/planning context lives in `docs/private/` (gitignored, not published); agents may read `docs/private/iteration-2.md` for background but should keep public docs free of its contents
 - Agents SHOULD update design docs when reconnaissance uncovers findings that change assumptions (e.g., "Mode 06 is sparse on this ECU" → update risks section)
-- ADRs are **immutable once written** — capture decisions with rationale, don't edit retroactively
+- ADRs are **immutable once published** — capture decisions with rationale, don't edit retroactively. (Pre-release, before anyone relies on them, the set may still be renumbered to stay clean/contiguous.) Number as written, not by pre-reservation.
 
 ### Week 1 Priorities (in order)
 1. **Repo bootstrap** — flake.nix, CLAUDE.md, README, directory structure ✅ (done)
-2. **ADR 0003** — Telegraf vs OTel Collector for MQTT→Postgres (pure research, no code)
+2. **ADR 0001** — Telegraf vs OTel Collector for MQTT→Postgres (pure research, no code) ✅ (done)
 3. **Decode library scaffold** — `parse_mode06()` and `parse_mode01()` with synthetic golden tests
 4. **Decode table skeleton** — CSV with columns: `mid, tid, name, uasid, scale, offset, unit, source, covered_by_offtheshelf`
 5. **Tutorial post #1 outline** — draft structure (fill in real numbers after day 3 car work)
@@ -210,7 +214,7 @@ Consult `docs/design/architecture.md` §6 (Risks) for the live list. As of week 
 ## Exit Criteria (Week 1)
 
 - [ ] All hardware ordered day 0; gateway box ordered
-- [ ] Public repo: flake + devShell + CLAUDE.md + design docs + ADRs 0001–0003
+- [ ] Public repo: flake + devShell + CLAUDE.md + design docs + ADRs (0001 pipeline, 0002 Rust decode; hardware ADRs follow when the gear is evaluated)
 - [ ] Decode table with golden tests green in `nix flake check`
 - [ ] 5+ trip fixtures, VIN-scrubbed, committed
 - [ ] Kill-gate memo written: Mode 06 rich / narrowed to Mode 01

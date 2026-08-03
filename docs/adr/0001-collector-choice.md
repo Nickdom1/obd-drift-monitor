@@ -1,4 +1,4 @@
-# ADR 0003: Telegraf for MQTT→Postgres Telemetry Pipeline
+# ADR 0001: Telegraf for MQTT→Postgres Telemetry Pipeline
 
 **Status:** Accepted  
 **Date:** 2026-08-02  
