@@ -127,11 +127,19 @@ microSD (WiCAN offline buffer).
 
 Schema (v0):
 
+- `frames(ts, source, mode, raw)` — the raw MQTT payload / ISO-TP response **as received,
+  before decode fan-out**, stored for *every* frame regardless of decode success.
+  Range-partitioned monthly on `ts`, BRIN index on `ts`. This is the decoder's audit trail:
+  it lets a corrected decoder **re-decode history** instead of losing it. It is deliberately
+  *not* the same as `samples.raw` (which is per already-decoded row) or `decode_log` (failures
+  only) — those don't help when a decode *succeeds but is wrong*. We shipped exactly that class
+  of bug once (the 7- vs 9-byte Mode 06 framing), so at v0 — a decoder that has never seen a
+  real car — the archive is cheap insurance against having to discard a season of captures.
 - `trips(trip_id, vin, started_at, ended_at, source)` — trip boundaries derived in SQL
   from timestamp gaps (a view/matview), keeping the pipeline stateless.
 - `samples(ts, trip_id, mode, mid_or_pid, tid, value, unit, limit_lo, limit_hi, raw)` —
-  one row per decoded monitor/PID reading. **Range-partitioned monthly on `ts`**, BRIN
-  index on `ts`, btree on `(mid_or_pid, ts)`.
+  one row per decoded monitor/PID reading, produced by re-reading `frames`. **Range-partitioned
+  monthly on `ts`**, BRIN index on `ts`, btree on `(mid_or_pid, ts)`.
 - `decode_log(...)` — decode failures with the `raw` hex retained, so the decode table
   can be improved retroactively.
 

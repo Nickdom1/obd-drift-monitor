@@ -124,7 +124,7 @@ obd-drift-monitor/
 
 ### Design Documents Are Living
 - `docs/design/architecture.md` is the **strategic anchor** — consult it before making architectural decisions
-- Deeper strategy/planning context lives in `docs/private/` (gitignored, not published); agents may read `docs/private/iteration-2.md` for background but should keep public docs free of its contents
+- Deeper strategy/planning context lives in `docs/private/` (gitignored, not published); agents should consult `docs/private/INDEX.md` for the planning docs and keep public docs free of their contents
 - Agents SHOULD update design docs when reconnaissance uncovers findings that change assumptions (e.g., "Mode 06 is sparse on this ECU" → update risks section)
 - ADRs are **immutable once published** — capture decisions with rationale, don't edit retroactively. (Pre-release, before anyone relies on them, the set may still be renumbered to stay clean/contiguous.) Number as written, not by pre-reservation.
 
