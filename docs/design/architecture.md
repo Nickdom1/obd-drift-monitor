@@ -76,7 +76,7 @@ hasn't been made/written yet is marked *planned*; it gets the next free number w
 
 | Component | Choice | Rationale | ADR |
 |---|---|---|---|
-| Pipeline | Telegraf: `mqtt_consumer` in, decode via the `decoderd` `execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; a native Rust binary makes `execd` the clear choice over Starlark | [0001](../adr/0001-collector-choice.md) |
+| Pipeline | Telegraf: `mqtt_consumer` in, decode via the `decoderd` `execd` processor, `outputs.postgresql` out | Configure an existing collector rather than hand-roll one; a native Rust binary makes `execd` the clear choice over Starlark (wire contract + deferred `--telegraf` adapter: [telegraf-execd.md](telegraf-execd.md)) | [0001](../adr/0001-collector-choice.md) |
 | Decode library | Pure **Rust** (`decode-rs`), shipped as `decoderd`; python-OBD as oracle only | Fixes a Mode 06 framing bug, fills a Rust-ecosystem gap, native `execd` fit; proven by equivalence against a GPL-clean frozen oracle | [0002](../adr/0002-rust-decode-rewrite.md) |
 | Edge collector | WiCAN Pro | ESP32-S3, CAN transceiver, <1 mA sleep, SD buffering, MQTT — an edge device with no firmware work on the critical path | planned |
 | Gateway | Used HP ProDesk/EliteDesk mini (i5-8500T-class, 16 GB, NVMe) | x86_64 + KVM in one box: appliance, CI runner, and VM-test host | planned |

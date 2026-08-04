@@ -26,7 +26,7 @@ CAN frame  →  WiCAN Pro ──MQTT/TLS──▶  Telegraf  →  decoderd (Rust
 ```
 
 Decode runs on the gateway as a small native Rust binary (`decoderd`) — the *same* binary the tests
-drive, run as a Telegraf `execd` processor. The full topology (self-hosted overlay network, backups,
+drive, deployed as the pipeline's Telegraf `execd` processor. The full topology (self-hosted overlay network, backups,
 CI runner, public read-only dashboard) lives in the
 [architecture doc](docs/design/architecture.md). No cloud, no subscriptions, offline-capable.
 
@@ -62,15 +62,13 @@ Pre-hardware; the decode library is complete and tested.
   the deployed `decoderd` binary (`pytest`), cross-checked to the python-OBD oracle
 - ✅ **Benchmark** — ~30 M frames/s, ≈720× the python-OBD baseline on the golden corpus
   ([benchmark](docs/design/benchmark.md)); correctness first, speed is the measured bonus
+- ✅ **Standalone Nix package** — `nix build .#decoder` / `nix run .#decoder` plus an overlay, so the
+  decoder is consumable on its own without the gateway config
 - ✅ **Pipeline chosen** — Telegraf for MQTT→Postgres ([ADR 0001](docs/adr/0001-collector-choice.md))
 - ✅ Decode-table skeleton (`pkgs/decode-rs/decode_table.csv`)
 
-## Roadmap
-
-- Nix-packaged decoder + overlay so `nix build .#decoder` stands alone
-- NixOS gateway appliance config, as hardware arrives
-- First VIN-scrubbed trip fixtures; decode table validated against the OBDLink SX oracle
-- End-to-end VM test: recorded telemetry in → rendered dashboard out
+What's next (gateway appliance, VIN-scrubbed trip fixtures + oracle validation, the end-to-end VM
+test) is tracked in the [architecture doc](docs/design/architecture.md).
 
 ## Quick start
 

@@ -19,6 +19,14 @@
 //! The wire DTOs live here (not in the `decode` library) so the library stays
 //! dependency-free — the tiny-binary story. They mirror `decode::MonitorResult` /
 //! `decode::PidValue` field-for-field.
+//!
+//! # execd note
+//!
+//! The schema above is the CLI / equivalence-harness form. Telegraf's `execd`
+//! passes whole *metrics* (name/tags/fields/timestamp), not this bespoke request,
+//! so the deployed path adds a `--telegraf` metric-JSON adapter over the same
+//! `decode::*` core — built and verified at the Week 2 bench, not blind. Contract:
+//! `docs/design/telegraf-execd.md`.
 
 use std::io::{self, BufRead, Write};
 

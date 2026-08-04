@@ -2,8 +2,8 @@
 //!
 //! # The framing fix
 //!
-//! This is the corrected implementation. The old Python parser read a single MID
-//! from the response *header* and then sliced repeating **7-byte** `TID + value +
+//! This is the corrected implementation. Our own first Python parser read a single
+//! MID from the response *header* and then sliced repeating **7-byte** `TID + value +
 //! min + max` records with TID and UASID folded into one byte. That is wrong on
 //! both counts. Verified against the python-OBD oracle (`obd/decoders.py`
 //! `parse_monitor_test`) and SAE J1979, the correct CAN layout is a sequence of

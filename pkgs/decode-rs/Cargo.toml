@@ -11,7 +11,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/detello/obd-drift-monitor"
+repository = "https://github.com/Nickdom1/obd-drift-monitor"
 
 [profile.release]
 # The decoder ships as a tiny native binary (Telegraf execd processor). Optimize

@@ -18,16 +18,14 @@
           pytest-cov
         ]);
 
-        # The Rust decoder, built + unit/golden-tested once. buildRustPackage runs
-        # `cargo test` (incl. the frozen-vector golden gate) in its check phase and
-        # installs the `decoderd` binary. Reused as the `cargo-test` check AND fed
-        # to the pytest check so the harness drives the exact deployed artifact.
-        decoderPkg = pkgs.rustPlatform.buildRustPackage {
-          pname = "obd-decoder";
-          version = "0.1.0";
-          src = ./pkgs/decode-rs;
-          cargoLock.lockFile = ./pkgs/decode-rs/Cargo.lock;
-        };
+        # The Rust decoder, built + unit/golden-tested once. Defined in
+        # pkgs/decode-rs/package.nix (a callPackage-able derivation) so the exported
+        # `packages.decoder`, the `overlays.default`, and the `cargo-test` check all
+        # share ONE definition. buildRustPackage runs `cargo test` (incl. the frozen-
+        # vector golden gate) in its check phase and installs the `decoderd` binary;
+        # the same derivation is also fed to the pytest check so the harness drives
+        # the exact deployed artifact.
+        decoderPkg = pkgs.callPackage ./pkgs/decode-rs/package.nix { };
 
         # python-OBD (GPL-2.0) — the independent oracle for regen_golden.py only.
         # DEV-ONLY: it lives exclusively in the `regen` dev shell, never in any
@@ -109,6 +107,12 @@
           '';
         };
 
+        # Standalone decoder package: `nix build .#decoder` / `nix run .#decoder`
+        # (runs decoderd via meta.mainProgram) with no gateway/host coupling — the
+        # independently-consumable proof. Same derivation as `checks.cargo-test`.
+        packages.decoder = decoderPkg;
+        packages.default = decoderPkg;
+
         # Checks run by 'nix flake check'. The aggregate now goes green: the gateway
         # placeholder gained a nominal root fileSystems entry so it evaluates. Full
         # gateway/hardware decoupling is still Phase 7; this is just the eval fix.
@@ -153,6 +157,14 @@
         };
       }
     ) // {
+      # Overlay so a consumer can pull just the decoder into their own nixpkgs
+      # (e.g. `pkgs.obd-decoder`) without adopting the gateway/host config — the
+      # loosely-coupled, independently-consumable piece. Shares package.nix with
+      # the per-system `packages.decoder` output above.
+      overlays.default = final: _prev: {
+        obd-decoder = final.callPackage ./pkgs/decode-rs/package.nix { };
+      };
+
       # NixOS configuration for the gateway appliance
       # (ProDesk G4 target - to be populated in week 2+)
       nixosConfigurations.gateway = nixpkgs.lib.nixosSystem {

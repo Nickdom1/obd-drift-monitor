@@ -8,17 +8,24 @@ This file provides context for AI agents (Claude, Copilot, Cursor, etc.) working
 
 **What it does:** Captures OBD-II Mode 06 monitor test results from a 2018 Honda Accord, stores them as time series in Postgres, and tracks drift over time to catch sensor degradation before fault codes appear.
 
-**Current phase:** Week 1 — decode library development and hardware reconnaissance (pre-hardware, laptop-only work).
+**Current phase:** Week 1 — decode library complete; pre-hardware, laptop-only work continues (still
+awaiting the CANable/car for real fixtures + the Mode 06 kill-gate decision).
 
-> **Active work: Rust decode conversion (in progress).** The shipped decoder is being rewritten in
-> **Rust** (`pkgs/decode-rs/`), fixing a real Mode 06 framing bug (7-byte legacy vs correct 9-byte
-> CAN records). Python is retained **only** as the equivalence/benchmark harness and oracle
-> (python-OBD). See `docs/private/rust-conversion-plan.md` for the full plan and phase status.
-> Phases 1–2 (scaffold + decoders) and the nixpkgs bump are done. Phase 3 is in progress: the old
-> buggy Python decoder (`pkgs/decode/`) is **deleted**, and the equivalence harness + frozen golden
-> vectors are in place — a hermetic `tests/golden.rs` gate plus `decoderd` driven over
-> `pkgs/decode-rs/golden/mode06.json` by `harness/test_equivalence.py`. python-OBD is the oracle for
-> the standard-UASID subset via the dev-only `harness/regen_golden.py` (run in `nix develop .#regen`).
+> **Active work: Rust decode conversion — Phases 1–5 done.** The shipped decoder is **Rust**
+> (`pkgs/decode-rs/`), fixing a real Mode 06 framing bug (7-byte legacy vs correct 9-byte CAN records).
+> Python is retained **only** as the equivalence/benchmark harness and oracle (python-OBD). Full plan
+> and phase status: `docs/private/rust-conversion-plan.md`.
+> **Done:** scaffold + Mode 06/01 decoders + bitmaps + UAS table; nixpkgs bump to nixos-26.05; old
+> buggy Python decoder deleted; two-tier equivalence gate (hermetic `crates/decode/tests/golden.rs`
+> plus `decoderd` driven over `golden/mode06.json` by `harness/test_equivalence.py`, cross-checked to
+> the dev-only python-OBD oracle via `harness/regen_golden.py` in `nix develop .#regen`); criterion
+> benchmark (`docs/design/benchmark.md`); gateway eval fixed so aggregate `nix flake check` is green;
+> ADRs collapsed to a clean 0001/0002; **Phase 5** standalone `packages.decoder` + `overlays.default`
+> (`nix build/run .#decoder`), execd contract pinned in `docs/design/telegraf-execd.md`.
+> **Next (decode):** the `decoderd --telegraf` metric-JSON adapter, built + verified at the Week 2
+> Mosquitto→Telegraf→Postgres bench (not blind). **Biggest laptop-doable work left overall:** the
+> `tests/e2e.nix` multi-node VM replay test (iteration-2 Week 3). **Car-blocked:** real VIN-scrubbed
+> fixtures, oracle validation, `decode_table.csv` rows, and the **Mode 06 kill-gate decision**.
 
 ## Build and Test Commands
 
@@ -37,6 +44,10 @@ pytest harness/
 # Lint / format Python (harness)
 ruff check harness/
 ruff format harness/
+
+# Build / run the standalone decoder package (no gateway coupling; runs decoderd)
+nix build .#decoder && ./result/bin/decoderd   # or: nix run .#decoder
+# Consumers can instead add overlays.default (exposes pkgs.obd-decoder).
 
 # Seed / verify golden vectors against the python-OBD oracle (GPL, dev-only shell)
 nix develop .#regen --command python harness/regen_golden.py
@@ -57,7 +68,8 @@ nix build .#checks.x86_64-linux.ruff-check
 obd-drift-monitor/
 ├── docs/
 │   ├── design/          # Living design documents (agents update these per findings)
-│   │   └── architecture.md
+│   │   ├── architecture.md
+│   │   └── telegraf-execd.md    # execd wire contract + deferred --telegraf adapter
 │   ├── private/         # personal strategy/planning notes — gitignored, not published
 │   └── adr/             # Architecture Decision Records (numbered as written, immutable once published)
 │       ├── 0001-collector-choice.md       # Telegraf for MQTT→Postgres
@@ -69,6 +81,7 @@ obd-drift-monitor/
 │   │   ├── crates/decoderd/  # thin bin: JSON-lines stdin->stdout (== Telegraf execd processor)
 │   │   ├── golden/mode06.json    # frozen oracle vectors (committed data)
 │   │   ├── decode_table.csv      # mid,tid → name + covered_by_offtheshelf boundary
+│   │   ├── package.nix           # callPackage-able derivation (packages.decoder + overlay)
 │   │   └── Cargo.toml / rust-toolchain.toml
 │   └── gateway/         # NixOS configuration for the ProDesk appliance (week 2+)
 ├── harness/             # Python (harness ONLY): test_equivalence.py (CI), regen_golden.py (dev)
@@ -213,13 +226,13 @@ Consult `docs/design/architecture.md` §6 (Risks) for the live list. As of week 
 
 ## Exit Criteria (Week 1)
 
-- [ ] All hardware ordered day 0; gateway box ordered
-- [ ] Public repo: flake + devShell + CLAUDE.md + design docs + ADRs (0001 pipeline, 0002 Rust decode; hardware ADRs follow when the gear is evaluated)
-- [ ] Decode table with golden tests green in `nix flake check`
-- [ ] 5+ trip fixtures, VIN-scrubbed, committed
-- [ ] Kill-gate memo written: Mode 06 rich / narrowed to Mode 01
+- [x] All hardware ordered day 0; gateway box ordered
+- [x] Public repo: flake + devShell + CLAUDE.md + design docs + ADRs (0001 pipeline, 0002 Rust decode; hardware ADRs follow when the gear is evaluated)
+- [x] Decode table with golden tests green in `nix flake check`
+- [ ] 5+ trip fixtures, VIN-scrubbed, committed — *car-blocked*
+- [ ] Kill-gate memo written: Mode 06 rich / narrowed to Mode 01 — *car-blocked*
 - [ ] Tutorial post #1 published
 
 ---
 
-**Last updated:** Week 1 (repo bootstrap)
+**Last updated:** Week 1 — Rust decode conversion Phases 1–5 complete (`nix flake check` green)
